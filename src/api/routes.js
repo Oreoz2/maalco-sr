@@ -255,6 +255,7 @@ router.get('/leaderboard', async (req, res) => {
     
     const formattedSRs = sortedSRs.map((sr, index) => ({
       ...sr,
+      profileImage: getSRProfileImage(sr.referral_code),
       rank: index + 1,
       conversionRate: sr.totalCustomersRegistered > 0 
         ? ((sr.totalOrders / sr.totalCustomersRegistered) * 100).toFixed(1)
