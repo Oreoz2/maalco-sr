@@ -11,7 +11,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=4848
-      - DB_HOST=localhost
+      - DB_HOST=127.0.0.1
       - DB_PORT=3306
       - DB_USER=Maalco
       - DB_PASSWORD=xgQCkoUmBexaitGm

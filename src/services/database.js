@@ -9,8 +9,8 @@ class DatabaseService {
 
   initializePool() {
     const config = {
-      host: process.env.DB_HOST || 'localhost',
-      port: process.env.DB_PORT || 3306,
+      host: process.env.DB_HOST || '127.0.0.1',
+      port: parseInt(process.env.DB_PORT) || 3306,
       user: process.env.DB_USER || 'Maalco',
       password: process.env.DB_PASSWORD || 'xgQCkoUmBexaitGm',
       database: process.env.DB_NAME || 'Maalco_prod',
@@ -19,6 +19,7 @@ class DatabaseService {
       queueLimit: 0,
       acquireTimeout: 60000,
       timeout: 60000,
+      family: 4, // Force IPv4
     };
 
     this.pool = mysql.createPool(config);
