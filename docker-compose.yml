@@ -6,12 +6,16 @@ services:
     ports:
       - "4848:4848"
     restart: unless-stopped
+    volumes:
+      - ./public/sr-images:/app/public/sr-images
+      - ./sr-images-mapping.json:/app/sr-images-mapping.json
     environment:
       - NODE_ENV=production
       - PORT=4848
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.maalco.rule=Host(`your-domain.com`)"
-      - "traefik.http.routers.maalco.tls=true"
-      - "traefik.http.routers.maalco.tls.certresolver=letsencrypt"
-
+      - DB_HOST=host.docker.internal
+      - DB_PORT=3306
+      - DB_USER=Maalco
+      - DB_PASSWORD=xgQCkoUmBexaitGm
+      - DB_NAME=Maalco_prod
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

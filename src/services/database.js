@@ -9,11 +9,11 @@ class DatabaseService {
 
   initializePool() {
     const config = {
-      host: process.env.NODE_ENV === 'production' ? 'localhost' : 'localhost',
-      port: process.env.NODE_ENV === 'production' ? 3306 : 3307, // Use tunnel port for development
-      user: 'Maalco',
-      password: 'xgQCkoUmBexaitGm',
-      database: 'Maalco_prod',
+      host: process.env.DB_HOST || 'localhost',
+      port: process.env.DB_PORT || 3306,
+      user: process.env.DB_USER || 'Maalco',
+      password: process.env.DB_PASSWORD || 'xgQCkoUmBexaitGm',
+      database: process.env.DB_NAME || 'Maalco_prod',
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,
