@@ -167,16 +167,12 @@ class DatabaseService {
         mp.logo as profileImage,
         mp.created_at as joinDate,
         COUNT(DISTINCT u.id) as totalCustomersRegistered,
-        COUNT(DISTINCT CASE WHEN o.status != '1' THEN o.id END) as totalOrders,
-        COALESCE(SUM(CASE WHEN o.status != '1' THEN o.final_total END), 0) as totalOrderValue
+        COUNT(DISTINCT CASE WHEN o.active_status IN ('2', '3', '4', '5', '6') THEN o.id END) as totalOrders,
+        COALESCE(SUM(CASE WHEN o.active_status IN ('2', '3', '4', '5', '6') THEN o.final_total END), 0) as totalOrderValue
       FROM marketing_persons mp
       LEFT JOIN users u ON mp.referral_code = u.referral_code ${dateCondition}
-      LEFT JOIN orders o ON u.id = o.user_id AND o.status != '1'
+      LEFT JOIN orders o ON u.id = o.user_id AND o.active_status IN ('2', '3', '4', '5', '6')
       WHERE mp.status = 1
-        AND mp.name NOT IN ('ggh', 'gmg', 'gh', 'tuii', 'Marketing Person')
-        AND mp.name NOT LIKE '%test%'
-        AND mp.name NOT LIKE '%@%'
-        AND LENGTH(mp.name) > 3
         AND mp.name NOT IN ('ggh', 'gmg', 'gh', 'tuii', 'Marketing Person')
         AND mp.name NOT LIKE '%test%'
         AND mp.name NOT LIKE '%@%'
@@ -276,12 +272,12 @@ class DatabaseService {
     const query = `
       SELECT 
         COUNT(DISTINCT u.id) as totalRegistrations,
-        COUNT(DISTINCT CASE WHEN t.status = 'success' THEN o.id END) as totalOrders,
-        COALESCE(SUM(CASE WHEN t.status = 'success' THEN o.final_total END), 0) as totalOrderValue,
+        COUNT(DISTINCT CASE WHEN t.status = 'success' AND o.active_status IN ('2', '3', '4', '5', '6') THEN o.id END) as totalOrders,
+        COALESCE(SUM(CASE WHEN t.status = 'success' AND o.active_status IN ('2', '3', '4', '5', '6') THEN o.final_total END), 0) as totalOrderValue,
         COUNT(DISTINCT mp.id) as totalActiveSRs
       FROM marketing_persons mp
       LEFT JOIN users u ON mp.referral_code = u.referral_code ${dateCondition}
-      LEFT JOIN orders o ON u.id = o.user_id
+      LEFT JOIN orders o ON u.id = o.user_id AND o.active_status IN ('2', '3', '4', '5', '6')
       LEFT JOIN transactions t ON o.id = CAST(t.order_id AS UNSIGNED) AND t.status = 'success'
       WHERE mp.status = 1
         AND mp.name NOT IN ('ggh', 'gmg', 'gh', 'tuii', 'Marketing Person')
