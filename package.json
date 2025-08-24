@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:server": "node server.js",
+    "dev:full": "concurrently \"npm run dev\" \"npm run dev:server\"",
     "build": "vite build",
+    "start": "node server.js",
     "lint": "eslint .",
     "preview": "vite preview",
     "deploy:netlify": "netlify deploy --prod --dir=dist",
@@ -16,7 +19,7 @@
     "deploy:azure": "az storage blob upload-batch -s dist -d '$web'",
     "deploy:all": "npm run build && npm run deploy:netlify && npm run deploy:vercel",
     "docker:build": "docker build -t maalco-dashboard .",
-    "docker:run": "docker run -p 80:80 maalco-dashboard",
+    "docker:run": "docker run -p 4848:4848 maalco-dashboard",
     "docker:compose": "docker-compose up -d"
   },
   "dependencies": {
@@ -68,7 +71,11 @@
     "tailwind-merge": "^3.3.0",
     "tailwindcss": "^4.1.7",
     "vaul": "^1.1.2",
-    "zod": "^3.24.4"
+    "zod": "^3.24.4",
+    "express": "^4.21.2",
+    "cors": "^2.8.5",
+    "mysql2": "^3.11.5",
+    "multer": "^1.4.5-lts.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.25.0",
@@ -80,7 +87,8 @@
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^16.0.0",
     "tw-animate-css": "^1.2.9",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "concurrently": "^9.1.0"
   },
   "packageManager": "pnpm@10.4.1+sha512.c753b6c3ad7afa13af388fa6d808035a008e30ea9993f58c6663e2bc5ff21679aa834db094987129aa4d488b86df57f7b634981b2f827cdcacc698cc0cfb88af"
 }

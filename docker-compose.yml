@@ -4,10 +4,11 @@ services:
   maalco-dashboard:
     build: .
     ports:
-      - "80:80"
+      - "4848:4848"
     restart: unless-stopped
     environment:
       - NODE_ENV=production
+      - PORT=4848
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.maalco.rule=Host(`your-domain.com`)"

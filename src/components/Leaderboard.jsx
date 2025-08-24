@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/badge.jsx';
@@ -16,16 +16,26 @@ import {
   Target,
   Zap,
   Sparkles,
-  Filter
+  Filter,
+  RefreshCw,
+  Download
 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { srs } from '../data/srData';
+import ApiService from '../services/apiService';
 
 function Leaderboard() {
-  const [selectedPeriod, setSelectedPeriod] = useState('Weekly');
+  const [selectedPeriod, setSelectedPeriod] = useState('7d');
   const [rankingCriteria, setRankingCriteria] = useState('registrations');
+  const [srs, setSRs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const periods = ['Daily', 'Weekly', 'Monthly'];
+  const periods = [
+    { label: 'Daily', value: 'today' },
+    { label: 'Weekly', value: '7d' },
+    { label: 'Monthly', value: '30d' }
+  ];
+  
   const rankingOptions = [
     { value: 'registrations', label: 'Customer Registrations', icon: Users },
     { value: 'revenue', label: 'Order Value', icon: DollarSign },
@@ -33,48 +43,36 @@ function Leaderboard() {
     { value: 'conversion', label: 'Conversion Rate', icon: Target }
   ];
 
-  // Dynamic ranking function based on selected criteria
-  const getRankedSRs = () => {
-    return [...srs].sort((a, b) => {
-      switch (rankingCriteria) {
-        case 'registrations':
-          // Primary: registrations, Secondary: orders
-          if (b.totalCustomersRegistered !== a.totalCustomersRegistered) {
-            return b.totalCustomersRegistered - a.totalCustomersRegistered;
-          }
-          return b.totalOrders - a.totalOrders;
-        
-        case 'revenue':
-          // Primary: revenue, Secondary: registrations
-          if (b.totalOrderValue !== a.totalOrderValue) {
-            return b.totalOrderValue - a.totalOrderValue;
-          }
-          return b.totalCustomersRegistered - a.totalCustomersRegistered;
-        
-        case 'orders':
-          // Primary: orders, Secondary: revenue
-          if (b.totalOrders !== a.totalOrders) {
-            return b.totalOrders - a.totalOrders;
-          }
-          return b.totalOrderValue - a.totalOrderValue;
-        
-        case 'conversion':
-          // Calculate conversion rate and sort
-          const aConversion = a.totalCustomersRegistered > 0 ? (a.totalOrders / a.totalCustomersRegistered) * 100 : 0;
-          const bConversion = b.totalCustomersRegistered > 0 ? (b.totalOrders / b.totalCustomersRegistered) * 100 : 0;
-          if (bConversion !== aConversion) {
-            return bConversion - aConversion;
-          }
-          return b.totalCustomersRegistered - a.totalCustomersRegistered;
-        
-        default:
-          return b.totalCustomersRegistered - a.totalCustomersRegistered;
-      }
-    });
+  // Load leaderboard data
+  const loadLeaderboardData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const leaderboard = await ApiService.getLeaderboard(rankingCriteria, selectedPeriod);
+      setSRs(leaderboard);
+    } catch (err) {
+      console.error('Error loading leaderboard:', err);
+      setError('Failed to load leaderboard data. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const rankedSRs = getRankedSRs();
-  const topThree = rankedSRs.slice(0, 3);
+  useEffect(() => {
+    loadLeaderboardData();
+  }, [selectedPeriod, rankingCriteria]);
+
+  // Export leaderboard data
+  const handleExport = async () => {
+    try {
+      await ApiService.exportData(selectedPeriod, 'csv');
+    } catch (err) {
+      console.error('Export failed:', err);
+    }
+  };
+
+  // SRs are already sorted by the API
+  const topThree = srs.slice(0, 3);
 
   // Get value for display based on criteria
   const getDisplayValue = (sr) => {
@@ -129,6 +127,32 @@ function Leaderboard() {
     }
   };
 
+  if (loading && srs.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-96">
+        <div className="text-center">
+          <RefreshCw className="w-16 h-16 animate-spin mx-auto mb-4 text-yellow-600" />
+          <p className="text-gray-600">Loading leaderboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-96">
+        <div className="text-center">
+          <div className="text-red-600 mb-4">⚠️ Error</div>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <Button onClick={loadLeaderboardData} className="bg-red-600 hover:bg-red-700">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <motion.div 
       className="space-y-8"
@@ -137,13 +161,34 @@ function Leaderboard() {
       animate="visible"
     >
       {/* Header */}
-      <motion.div variants={itemVariants} className="text-center">
-        <h1 className="text-4xl font-bold text-gray-900 mb-2 flex items-center justify-center">
-          <Trophy className="w-10 h-10 mr-3 text-yellow-500" />
-          Leaderboard
-          <Trophy className="w-10 h-10 ml-3 text-yellow-500" />
-        </h1>
-        <p className="text-xl text-gray-600">SR performance rankings and achievements</p>
+      <motion.div variants={itemVariants} className="flex justify-between items-center">
+        <div className="text-center flex-1">
+          <h1 className="text-4xl font-bold text-gray-900 mb-2 flex items-center justify-center">
+            <Trophy className="w-10 h-10 mr-3 text-yellow-500" />
+            Leaderboard
+            <Trophy className="w-10 h-10 ml-3 text-yellow-500" />
+          </h1>
+          <p className="text-xl text-gray-600">SR performance rankings and achievements</p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={loadLeaderboardData}
+            disabled={loading}
+            className="text-gray-600 border-gray-300 hover:border-yellow-600"
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleExport}
+            className="text-gray-600 border-gray-300 hover:border-yellow-600"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Export
+          </Button>
+        </div>
       </motion.div>
 
       {/* Controls */}
@@ -152,16 +197,16 @@ function Leaderboard() {
         <div className="flex bg-white rounded-lg border border-gray-200 shadow-sm p-1">
           {periods.map((period) => (
             <Button
-              key={period}
-              variant={selectedPeriod === period ? "default" : "ghost"}
-              onClick={() => setSelectedPeriod(period)}
+              key={period.value}
+              variant={selectedPeriod === period.value ? "default" : "ghost"}
+              onClick={() => setSelectedPeriod(period.value)}
               className={`px-4 py-2 rounded-md transition-all duration-200 ${
-                selectedPeriod === period
+                selectedPeriod === period.value
                   ? 'bg-red-600 text-white shadow-md'
                   : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
               }`}
             >
-              {period}
+              {period.label}
             </Button>
           ))}
         </div>
@@ -309,7 +354,7 @@ function Leaderboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {rankedSRs.map((sr, index) => {
+              {srs.map((sr, index) => {
                 const rank = index + 1;
                 const displayValue = getDisplayValue(sr);
                 
@@ -371,10 +416,7 @@ function Leaderboard() {
                       </div>
                       <div>
                         <div className="text-lg font-bold text-purple-600">
-                          {sr.totalCustomersRegistered > 0 
-                            ? `${((sr.totalOrders / sr.totalCustomersRegistered) * 100).toFixed(1)}%`
-                            : '0.0%'
-                          }
+                          {sr.conversionRate || '0.0'}%
                         </div>
                         <div className="text-xs text-gray-600">Conversion</div>
                       </div>

@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button.jsx';
 import { Card } from '@/components/ui/card.jsx';
 import { 
@@ -8,10 +8,11 @@ import {
   Users, 
   Settings,
   Menu,
-  X
+  X,
+  RefreshCw
 } from 'lucide-react';
 import './App.css';
-import { srs } from './data/srData';
+import ApiService from './services/apiService';
 import MaalcoLogo from './assets/maalco-logo.jpg';
 
 // Import components (we'll create these)
@@ -140,16 +141,76 @@ function App() {
 
 // Simple SRs list component
 function SRsList() {
+  const [srs, setSrs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const loadSRs = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const srsData = await ApiService.getSRs('all');
+      setSrs(srsData);
+    } catch (err) {
+      setError('Failed to load SRs. Please try again.');
+      console.error('Error loading SRs:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadSRs();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-96">
+        <div className="text-center">
+          <RefreshCw className="w-16 h-16 mx-auto mb-4 animate-spin text-red-600" />
+          <p className="text-gray-600">Loading Senior Representatives...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-96">
+        <div className="text-center">
+          <div className="text-red-600 mb-4">
+            <Users className="w-16 h-16 mx-auto mb-2" />
+            <p className="text-lg font-semibold">{error}</p>
+          </div>
+          <Button onClick={loadSRs} className="bg-red-600 hover:bg-red-700">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Try Again
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Senior Representatives</h1>
-        <p className="text-gray-600">View individual SR profiles and performance</p>
+      <div className="flex items-center justify-between">
+        <div className="text-center flex-1">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Senior Representatives</h1>
+          <p className="text-gray-600">View individual SR profiles and performance</p>
+        </div>
+        <Button
+          variant="outline"
+          onClick={loadSRs}
+          className="flex items-center space-x-2"
+        >
+          <RefreshCw className="w-4 h-4" />
+          <span>Refresh</span>
+        </Button>
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {srs.map((sr) => (
-          <Link key={sr.id} to={`/sr/${sr.id}`}>
+          <Link key={sr.id} to={`/sr/${sr.referralCode}`}>
             <Card className="p-6 text-center hover:shadow-lg transition-all duration-300 cursor-pointer group">
               <div className="relative mb-4">
                 <img

@@ -24,8 +24,7 @@ import {
   Download,
   RefreshCw
 } from 'lucide-react';
-import { motion } from 'framer-motion';
-import ApiService from '../services/apiService';
+import { motion } from 'framer-motion';\nimport ApiService from '../services/apiService';
 import { parseCSV, validateSRData, transformCSVToSRData, generateSampleCSV } from '../utils/csvParser';
 
 function AdminPanel() {
@@ -35,13 +34,6 @@ function AdminPanel() {
   const [loginError, setLoginError] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
   const [alerts, setAlerts] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [srs, setSrs] = useState([]);
-  const [dashboardSummary, setDashboardSummary] = useState({
-    totalRegistrations: 0,
-    totalOrders: 0,
-    totalOrderValue: 0
-  });
 
   // Form states
   const [srForm, setSrForm] = useState({
@@ -198,9 +190,10 @@ function AdminPanel() {
       // Transform CSV data to SR format
       const transformedData = transformCSVToSRData(csvData);
       
-      // For now, show info message about read-only access
-      addAlert('CSV import requires backend database write access. This is a read-only demo.', 'info');
-      console.log('Would import:', transformedData);
+      // Update the SR data (in a real app, this would be an API call)
+      updateSRData(transformedData);
+      
+      addAlert(`Successfully imported ${transformedData.length} SR records!`, 'success');
       
       // Reset CSV upload state
       setCsvFile(null);
@@ -441,7 +434,7 @@ function AdminPanel() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-yellow-800">
-                    {loading ? '...' : dashboardSummary.totalRegistrations}
+                    {srs.reduce((sum, sr) => sum + sr.totalCustomersRegistered, 0)}
                   </div>
                   <p className="text-xs text-yellow-600 mt-1">Customer registrations</p>
                 </CardContent>
@@ -456,7 +449,7 @@ function AdminPanel() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-green-800">
-                    {loading ? '...' : `$${dashboardSummary.totalOrderValue.toFixed(2)}`}
+                    ${srs.reduce((sum, sr) => sum + sr.totalOrderValue, 0).toFixed(2)}
                   </div>
                   <p className="text-xs text-green-600 mt-1">Generated revenue</p>
                 </CardContent>
@@ -469,13 +462,7 @@ function AdminPanel() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {loading ? (
-                    <div className="flex items-center justify-center p-8">
-                      <RefreshCw className="w-8 h-8 animate-spin text-gray-400" />
-                      <span className="ml-2 text-gray-600">Loading SRs...</span>
-                    </div>
-                  ) : (
-                    srs.map((sr) => (
+                  {srs.map((sr) => (
                     <div key={sr.id} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
                       <img
                         src={sr.profileImage}
@@ -491,8 +478,7 @@ function AdminPanel() {
                         <div className="text-gray-600">${sr.totalOrderValue.toFixed(2)} revenue</div>
                       </div>
                     </div>
-                  ))
-                  )}
+                  ))}
                 </div>
               </CardContent>
             </Card>

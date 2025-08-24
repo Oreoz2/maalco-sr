@@ -14,29 +14,79 @@ import {
   Zap,
   Award,
   Medal,
-  Sparkles
+  Sparkles,
+  Download,
+  RefreshCw
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { motion } from 'framer-motion';
-import { srs, getTotalRegistrations, getTotalOrders, getTotalOrderValue, getTopPerformers, getRegistrationTrend } from '../data/srData';
+import ApiService from '../services/apiService';
 
 function Dashboard() {
-  const [selectedPeriod, setSelectedPeriod] = useState('This Week');
-  
-  const totalRegistrations = getTotalRegistrations();
-  const totalOrders = getTotalOrders();
-  const totalOrderValue = getTotalOrderValue();
-  const topPerformers = getTopPerformers();
-  const registrationTrend = getRegistrationTrend();
+  const [selectedPeriod, setSelectedPeriod] = useState('7d');
+  const [dashboardData, setDashboardData] = useState({
+    totalRegistrations: 0,
+    totalOrders: 0,
+    totalOrderValue: 0,
+    averageOrderValue: 0,
+    conversionRate: 0
+  });
+  const [srs, setSRs] = useState([]);
+  const [trends, setTrends] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const periods = [
+    { label: 'Today', value: 'today' },
+    { label: 'This Week', value: '7d' },
+    { label: 'This Month', value: '30d' }
+  ];
+
+  // Load dashboard data
+  const loadDashboardData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const [summary, srsData, trendsData] = await Promise.all([
+        ApiService.getDashboardSummary(selectedPeriod),
+        ApiService.getSRs(selectedPeriod),
+        ApiService.getTrends(selectedPeriod)
+      ]);
+
+      setDashboardData(summary);
+      setSRs(srsData);
+      setTrends(trendsData);
+    } catch (err) {
+      console.error('Error loading dashboard data:', err);
+      setError('Failed to load dashboard data. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadDashboardData();
+  }, [selectedPeriod]);
 
   // Calculate performance distribution for pie chart
-  const performanceData = srs.map(sr => ({
+  const performanceData = srs.map((sr, index) => ({
     name: sr.name.split(' ')[0], // First name only
     value: sr.totalCustomersRegistered,
-    color: sr.id === 1 ? '#dc2626' : sr.id === 2 ? '#eab308' : '#16a34a'
+    color: index === 0 ? '#dc2626' : index === 1 ? '#eab308' : '#16a34a'
   }));
 
-  const periods = ['Today', 'This Week', 'This Month'];
+  // Get top performers (first 3 from sorted SRs)
+  const topPerformers = srs.slice(0, 3);
+
+  // Export data functionality
+  const handleExport = async () => {
+    try {
+      await ApiService.exportData(selectedPeriod, 'csv');
+    } catch (err) {
+      console.error('Export failed:', err);
+    }
+  };
 
   // Animation variants
   const containerVariants = {
@@ -70,6 +120,32 @@ function Dashboard() {
     return badges[rank] || { text: `#${rank}`, className: "bg-gray-100 text-gray-700" };
   };
 
+  if (loading && srs.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-96">
+        <div className="text-center">
+          <RefreshCw className="w-16 h-16 animate-spin mx-auto mb-4 text-red-600" />
+          <p className="text-gray-600">Loading dashboard data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-96">
+        <div className="text-center">
+          <div className="text-red-600 mb-4">⚠️ Error</div>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <Button onClick={loadDashboardData} className="bg-red-600 hover:bg-red-700">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <motion.div 
       className="space-y-8"
@@ -78,12 +154,33 @@ function Dashboard() {
       animate="visible"
     >
       {/* Header */}
-      <motion.div variants={itemVariants} className="text-center">
-        <h1 className="text-4xl font-bold text-gray-900 mb-2 flex items-center justify-center">
-          <Trophy className="w-10 h-10 mr-3 text-yellow-500" />
-          Performance Dashboard
-        </h1>
-        <p className="text-xl text-gray-600">Real-time insights into your SR team performance</p>
+      <motion.div variants={itemVariants} className="flex justify-between items-center">
+        <div className="text-center flex-1">
+          <h1 className="text-4xl font-bold text-gray-900 mb-2 flex items-center justify-center">
+            <Trophy className="w-10 h-10 mr-3 text-yellow-500" />
+            Performance Dashboard
+          </h1>
+          <p className="text-xl text-gray-600">Real-time insights into your SR team performance</p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={loadDashboardData}
+            disabled={loading}
+            className="text-gray-600 border-gray-300 hover:border-red-600"
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleExport}
+            className="text-gray-600 border-gray-300 hover:border-red-600"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Export
+          </Button>
+        </div>
       </motion.div>
 
       {/* SR Spotlight Section - Prominent Profile Pictures */}
@@ -203,16 +300,16 @@ function Dashboard() {
         <div className="flex bg-white rounded-lg border border-gray-200 shadow-sm p-1">
           {periods.map((period) => (
             <Button
-              key={period}
-              variant={selectedPeriod === period ? "default" : "ghost"}
-              onClick={() => setSelectedPeriod(period)}
+              key={period.value}
+              variant={selectedPeriod === period.value ? "default" : "ghost"}
+              onClick={() => setSelectedPeriod(period.value)}
               className={`px-6 py-2 rounded-md transition-all duration-200 ${
-                selectedPeriod === period
+                selectedPeriod === period.value
                   ? 'bg-red-600 text-white shadow-md'
                   : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
               }`}
             >
-              {period}
+              {period.label}
             </Button>
           ))}
         </div>
@@ -234,11 +331,11 @@ function Dashboard() {
               animate={{ scale: 1 }}
               transition={{ delay: 0.5, type: "spring", stiffness: 200 }}
             >
-              {totalRegistrations}
+              {dashboardData.totalRegistrations}
             </motion.div>
             <p className="text-xs text-red-600 mt-1 flex items-center">
               <TrendingUp className="w-3 h-3 mr-1" />
-              +12% from last week
+              {dashboardData.conversionRate}% conversion rate
             </p>
           </CardContent>
         </Card>
@@ -257,11 +354,11 @@ function Dashboard() {
               animate={{ scale: 1 }}
               transition={{ delay: 0.6, type: "spring", stiffness: 200 }}
             >
-              {totalOrders}
+              {dashboardData.totalOrders}
             </motion.div>
             <p className="text-xs text-yellow-600 mt-1 flex items-center">
               <Target className="w-3 h-3 mr-1" />
-              +25% conversion rate
+              {dashboardData.conversionRate}% conversion rate
             </p>
           </CardContent>
         </Card>
@@ -280,11 +377,11 @@ function Dashboard() {
               animate={{ scale: 1 }}
               transition={{ delay: 0.7, type: "spring", stiffness: 200 }}
             >
-              ${totalOrderValue.toFixed(2)}
+              ${dashboardData.totalOrderValue.toFixed(2)}
             </motion.div>
             <p className="text-xs text-green-600 mt-1 flex items-center">
               <DollarSign className="w-3 h-3 mr-1" />
-              Average: ${(totalOrderValue / Math.max(totalOrders, 1)).toFixed(2)} per order
+              Average: ${dashboardData.averageOrderValue} per order
             </p>
           </CardContent>
         </Card>
@@ -302,7 +399,7 @@ function Dashboard() {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={registrationTrend}>
+              <LineChart data={trends}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis 
                   dataKey="date" 

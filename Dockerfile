@@ -1,5 +1,5 @@
-# Multi-stage build for production
-FROM node:18-alpine AS builder
+# Production build with Node.js server
+FROM node:18-alpine
 
 # Set working directory
 WORKDIR /app
@@ -13,21 +13,22 @@ RUN npm ci --only=production
 # Copy source code
 COPY . .
 
-# Build the application
+# Build the React application
 RUN npm run build
 
-# Production stage
-FROM nginx:alpine
+# Create directory for SR images
+RUN mkdir -p /app/public/sr-images
 
-# Copy built files to nginx
-COPY --from=builder /app/dist /usr/share/nginx/html
+# Create default avatar
+RUN echo "Default Avatar Placeholder" > /app/public/sr-images/default-avatar.png
 
-# Copy nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Expose port 4848
+EXPOSE 4848
 
-# Expose port 80
-EXPOSE 80
+# Set environment variables
+ENV NODE_ENV=production
+ENV PORT=4848
 
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Start the server
+CMD ["npm", "start"]
 
