@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button.jsx';
 import { Card } from '@/components/ui/card.jsx';
@@ -6,30 +6,37 @@ import {
   Home, 
   Trophy, 
   Users, 
-  Settings,
   Menu,
   X,
-  RefreshCw
+  RefreshCw,
+  UserPlus,
+  ShoppingCart,
+  LogOut
 } from 'lucide-react';
 import './App.css';
 import ApiService from './services/apiService';
 import MaalcoLogo from './assets/maalco-logo.jpg';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import LoginModal from './components/LoginModal';
 
 // Import components (we'll create these)
 import Dashboard from './components/Dashboard';
 import Leaderboard from './components/Leaderboard';
 import SRProfile from './components/SRProfile';
-import AdminPanel from './components/AdminPanel';
+import Registrations from './components/Registrations';
+import Sales from './components/Sales';
 
 function Navigation() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const location = useLocation();
+  const { logout } = useAuth();
 
   const navItems = [
     { path: '/', icon: Home, label: 'Dashboard' },
+    { path: '/registrations', icon: UserPlus, label: 'Registrations' },
+    { path: '/sales', icon: ShoppingCart, label: 'Sales' },
     { path: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
     { path: '/srs', icon: Users, label: 'SRs' },
-    { path: '/admin', icon: Settings, label: 'Admin' }
   ];
 
   return (
@@ -37,24 +44,24 @@ function Navigation() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           {/* Logo and Brand */}
-          <div className="flex items-center">
-            <Link to="/" className="flex items-center space-x-3">
-              <div className="w-12 h-12 rounded-lg overflow-hidden shadow-md">
+          <div className="flex items-center flex-shrink-0">
+            <Link to="/" className="flex items-center space-x-2 sm:space-x-3">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg overflow-hidden shadow-md flex-shrink-0">
                 <img 
                   src={MaalcoLogo} 
                   alt="Maalco Foods Logo" 
                   className="w-full h-full object-cover"
                 />
               </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">Maalco Foods</h1>
-                <p className="text-sm text-gray-600">SR Performance</p>
+              <div className="min-w-0">
+                <h1 className="text-lg sm:text-xl font-bold text-gray-900 truncate">Maalco Foods</h1>
+                <p className="text-xs sm:text-sm text-gray-600 truncate">SR Performance</p>
               </div>
             </Link>
           </div>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-4">
+          <div className="hidden lg:flex items-center space-x-4 flex-shrink-0">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path;
@@ -73,6 +80,49 @@ function Navigation() {
                 </Link>
               );
             })}
+            
+            {/* Logout Button */}
+            <Button
+              onClick={logout}
+              variant="outline"
+              className="flex items-center space-x-2 text-gray-700 hover:text-red-600 border-gray-300 hover:border-red-600"
+            >
+              <LogOut size={20} />
+              <span className="font-medium">Logout</span>
+            </Button>
+          </div>
+
+          {/* Tablet Navigation - Compact Icons Only */}
+          <div className="hidden md:flex lg:hidden items-center space-x-2 flex-shrink-0">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = location.pathname === item.path;
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  title={item.label}
+                  className={`flex items-center justify-center p-2 rounded-lg transition-all duration-200 ${
+                    isActive
+                      ? 'bg-red-600 text-white shadow-lg'
+                      : 'text-gray-700 hover:bg-red-50 hover:text-red-600'
+                  }`}
+                >
+                  <Icon size={20} />
+                </Link>
+              );
+            })}
+            
+            {/* Tablet Logout Button - Icon Only */}
+            <Button
+              onClick={logout}
+              variant="outline"
+              size="sm"
+              title="Logout"
+              className="p-2 text-gray-700 hover:text-red-600 border-gray-300 hover:border-red-600 flex-shrink-0"
+            >
+              <LogOut size={20} />
+            </Button>
           </div>
 
           {/* Mobile menu button */}
@@ -111,6 +161,18 @@ function Navigation() {
                   </Link>
                 );
               })}
+              
+              {/* Mobile Logout Button */}
+              <button
+                onClick={() => {
+                  logout();
+                  setIsMenuOpen(false);
+                }}
+                className="flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 text-gray-700 hover:bg-red-50 hover:text-red-600 w-full"
+              >
+                <LogOut size={20} />
+                <span className="font-medium">Logout</span>
+              </button>
             </div>
           </div>
         )}
@@ -119,23 +181,72 @@ function Navigation() {
   );
 }
 
-function App() {
+// Protected Route component
+function ProtectedRoute({ children }) {
+  const { isAuthenticated, isLoading } = useAuth();
+  
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <RefreshCw className="w-16 h-16 mx-auto mb-4 animate-spin text-red-600" />
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gray-50 relative">
+        {/* Show blurred dashboard in background */}
+        <div className="absolute inset-0 pointer-events-none">
+          <Navigation />
+          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <Dashboard />
+          </main>
+        </div>
+        
+        {/* Login Modal */}
+        <LoginModal />
+      </div>
+    );
+  }
+  
+  return children;
+}
+
+// Main App component
+function AppContent() {
   return (
-    <Router>
-      <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50">
+      <ProtectedRoute>
         <Navigation />
         
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/registrations" element={<Registrations />} />
+            <Route path="/sales" element={<Sales />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
             <Route path="/sr/:id" element={<SRProfile />} />
             <Route path="/srs" element={<SRsList />} />
-            <Route path="/admin" element={<AdminPanel />} />
+            {/* Redirect any other path to dashboard */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
-      </div>
-    </Router>
+      </ProtectedRoute>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <Router>
+        <AppContent />
+      </Router>
+    </AuthProvider>
   );
 }
 

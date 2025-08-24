@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Badge } from '@/components/ui/badge.jsx';
 import { 
   LineChart, 
   Line, 
@@ -29,7 +28,7 @@ import {
   Zap,
   RefreshCw,
   Download,
-  Upload
+  Upload,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import ApiService from '../services/apiService';
@@ -112,6 +111,7 @@ function SRProfile() {
       setUploading(false);
     }
   };
+
 
   const handleExport = async () => {
     try {
@@ -283,24 +283,34 @@ function SRProfile() {
                     className="hidden"
                   />
                 </div>
+                
               </div>
 
               {/* Profile Info */}
               <div className="flex-1 text-center md:text-left">
                 <h2 className="text-3xl font-bold text-gray-900 mb-2">{sr.name}</h2>
-                <div className="flex flex-wrap justify-center md:justify-start gap-3 mb-4">
-                  <Badge variant="outline" className="bg-red-100 text-red-800 border-red-300">
-                    <Phone className="w-3 h-3 mr-1" />
-                    Code: {sr.referralCode}
-                  </Badge>
-                  <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">
-                    <Calendar className="w-3 h-3 mr-1" />
-                    {totalDaysActive} Active Days
-                  </Badge>
-                  <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
-                    <Target className="w-3 h-3 mr-1" />
-                    {conversionRate}% Conversion
-                  </Badge>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                  <div className="bg-red-50 p-3 rounded-lg border border-red-200">
+                    <div className="flex items-center text-red-700 text-sm font-medium">
+                      <Phone className="w-4 h-4 mr-2" />
+                      Referral Code
+                    </div>
+                    <div className="text-red-900 font-semibold mt-1">{sr.referralCode}</div>
+                  </div>
+                  <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                    <div className="flex items-center text-green-700 text-sm font-medium">
+                      <Calendar className="w-4 h-4 mr-2" />
+                      Active Days
+                    </div>
+                    <div className="text-green-900 font-semibold mt-1">{totalDaysActive} days</div>
+                  </div>
+                  <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                    <div className="flex items-center text-yellow-700 text-sm font-medium">
+                      <Target className="w-4 h-4 mr-2" />
+                      Conversion Rate
+                    </div>
+                    <div className="text-yellow-900 font-semibold mt-1">{conversionRate}%</div>
+                  </div>
                 </div>
                 
                 {/* Quick Stats */}
@@ -454,7 +464,7 @@ function SRProfile() {
         </motion.div>
       </div>
 
-      {/* Achievements Section */}
+      {/* Performance Insights Section */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -463,41 +473,105 @@ function SRProfile() {
         <Card className="hover:shadow-lg transition-all duration-300">
           <CardHeader>
             <CardTitle className="flex items-center">
-              <Award className="h-5 w-5 mr-2 text-yellow-600" />
-              Achievements & Badges
+              <TrendingUp className="h-5 w-5 mr-2 text-blue-600" />
+              Performance Insights
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {sr.achievements.map((achievement, index) => (
-                <motion.div
-                  key={index}
-                  whileHover={{ scale: 1.05 }}
-                  className="flex items-center space-x-3 p-4 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-lg border border-yellow-200"
-                >
-                  <div className="w-12 h-12 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center">
-                    <Trophy className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-gray-900">{achievement}</h4>
-                    <p className="text-sm text-gray-600">Earned recently</p>
-                  </div>
-                </motion.div>
-              ))}
-              
-              {/* Placeholder for more achievements */}
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg border border-gray-200 opacity-60"
-              >
-                <div className="w-12 h-12 bg-gray-300 rounded-full flex items-center justify-center">
-                  <Star className="w-6 h-6 text-gray-500" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Recent Activity Timeline */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                  <Calendar className="w-5 h-5 mr-2 text-gray-600" />
+                  Recent Activity Timeline
+                </h3>
+                <div className="space-y-3">
+                  {sr.dailyData.slice(-5).reverse().map((day, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                        <span className="text-sm font-medium text-gray-700">
+                          {new Date(day.date).toLocaleDateString('en-US', { 
+                            month: 'short', 
+                            day: 'numeric' 
+                          })}
+                        </span>
+                      </div>
+                      <div className="flex space-x-4 text-sm">
+                        <span className="text-red-600 font-medium">{day.registrations} reg</span>
+                        <span className="text-yellow-600 font-medium">{day.orders} ord</span>
+                        <span className="text-green-600 font-medium">${day.orderValue}</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div>
-                  <h4 className="font-semibold text-gray-500">More achievements coming...</h4>
-                  <p className="text-sm text-gray-400">Keep performing!</p>
+              </div>
+
+              {/* Performance Analysis */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                  <Award className="w-5 h-5 mr-2 text-gray-600" />
+                  Performance Analysis
+                </h3>
+                <div className="space-y-3">
+                  {/* Conversion Quality */}
+                  <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-green-700">Conversion Quality</span>
+                      <Target className="w-4 h-4 text-green-600" />
+                    </div>
+                    <div className="text-lg font-bold text-green-800">{conversionRate}%</div>
+                    <p className="text-xs text-green-600 mt-1">
+                      {parseFloat(conversionRate) >= 30 ? 'Excellent conversion rate' : 
+                       parseFloat(conversionRate) >= 20 ? 'Good conversion performance' :
+                       parseFloat(conversionRate) >= 10 ? 'Moderate conversion rate' :
+                       'Focus on improving conversion'}
+                    </p>
+                  </div>
+
+                  {/* Revenue Efficiency */}
+                  <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-blue-700">Revenue Efficiency</span>
+                      <DollarSign className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <div className="text-lg font-bold text-blue-800">${avgOrderValue}</div>
+                    <p className="text-xs text-blue-600 mt-1">Average order value</p>
+                  </div>
+
+                  {/* Activity Consistency */}
+                  <div className="p-4 bg-gradient-to-r from-purple-50 to-violet-50 rounded-lg border border-purple-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-purple-700">Activity Consistency</span>
+                      <Zap className="w-4 h-4 text-purple-600" />
+                    </div>
+                    <div className="text-lg font-bold text-purple-800">
+                      {Math.round((totalDaysActive / Math.max(sr.dailyData.length, 1)) * 100)}%
+                    </div>
+                    <p className="text-xs text-purple-600 mt-1">{totalDaysActive} of {sr.dailyData.length} days active</p>
+                  </div>
+
+                  {/* Performance Status */}
+                  <div className="p-4 bg-gradient-to-r from-orange-50 to-amber-50 rounded-lg border border-orange-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-orange-700">Performance Level</span>
+                      <Trophy className="w-4 h-4 text-orange-600" />
+                    </div>
+                    <div className="text-lg font-bold text-orange-800">
+                      {sr.totalCustomersRegistered >= 80 ? 'Elite' :
+                       sr.totalCustomersRegistered >= 50 ? 'Advanced' :
+                       sr.totalCustomersRegistered >= 25 ? 'Intermediate' :
+                       sr.totalCustomersRegistered >= 10 ? 'Developing' : 'New'}
+                    </div>
+                    <p className="text-xs text-orange-600 mt-1">
+                      {sr.totalCustomersRegistered >= 80 ? 'Top tier performer' :
+                       sr.totalCustomersRegistered >= 50 ? 'Strong performance' :
+                       sr.totalCustomersRegistered >= 25 ? 'Good progress' :
+                       sr.totalCustomersRegistered >= 10 ? 'Building momentum' : 'Getting started'}
+                    </p>
+                  </div>
                 </div>
-              </motion.div>
+              </div>
             </div>
           </CardContent>
         </Card>

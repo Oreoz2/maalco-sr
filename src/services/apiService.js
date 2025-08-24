@@ -116,6 +116,48 @@ class ApiService {
       registrations: trend.registrations
     }));
   }
+
+  // New Registration Tab API methods
+  async getRegistrationSummary(dateRange = '30d') {
+    const response = await fetch(`${API_BASE_URL}/registrations/summary?dateRange=${dateRange}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch registration summary');
+    }
+    return response.json();
+  }
+
+  async getRegistrationTrends(dateRange = '30d') {
+    const response = await fetch(`${API_BASE_URL}/registrations/trends?dateRange=${dateRange}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch registration trends');
+    }
+    return response.json();
+  }
+
+  async getRegistrationSources(dateRange = '30d') {
+    const response = await fetch(`${API_BASE_URL}/registrations/sources?dateRange=${dateRange}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch registration sources');
+    }
+    return response.json();
+  }
+
+  // New Sales Tab API methods
+  async getSalesSummary(dateRange = '30d') {
+    const response = await fetch(`${API_BASE_URL}/sales/summary?dateRange=${dateRange}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch sales summary');
+    }
+    return response.json();
+  }
+
+  async getSalesTrends(dateRange = '30d') {
+    const response = await fetch(`${API_BASE_URL}/sales/trends?dateRange=${dateRange}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch sales trends');
+    }
+    return response.json();
+  }
 }
 
 export default new ApiService();

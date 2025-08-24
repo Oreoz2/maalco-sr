@@ -21,6 +21,7 @@ import {
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { motion } from 'framer-motion';
 import ApiService from '../services/apiService';
+import DateRangePicker from './ui/date-range-picker.jsx';
 
 function Dashboard() {
   const [selectedPeriod, setSelectedPeriod] = useState('7d');
@@ -297,7 +298,7 @@ function Dashboard() {
 
       {/* Period Selector */}
       <motion.div variants={itemVariants} className="flex justify-center">
-        <div className="flex bg-white rounded-lg border border-gray-200 shadow-sm p-1">
+        <div className="flex bg-white rounded-lg border border-gray-200 shadow-sm p-1 gap-1">
           {periods.map((period) => (
             <Button
               key={period.value}
@@ -312,6 +313,10 @@ function Dashboard() {
               {period.label}
             </Button>
           ))}
+          <DateRangePicker 
+            onDateRangeChange={setSelectedPeriod}
+            selectedPeriod={selectedPeriod}
+          />
         </div>
       </motion.div>
 
