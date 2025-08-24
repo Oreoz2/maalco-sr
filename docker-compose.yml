@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  maalco-dashboard:
+    build: .
+    ports:
+      - "80:80"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.maalco.rule=Host(`your-domain.com`)"
+      - "traefik.http.routers.maalco.tls=true"
+      - "traefik.http.routers.maalco.tls.certresolver=letsencrypt"
+
