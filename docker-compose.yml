@@ -3,8 +3,7 @@ version: '3.8'
 services:
   maalco-dashboard:
     build: .
-    ports:
-      - "4848:4848"
+    network_mode: "host"
     restart: unless-stopped
     volumes:
       - ./public/sr-images:/app/public/sr-images
@@ -12,10 +11,8 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=4848
-      - DB_HOST=host.docker.internal
+      - DB_HOST=localhost
       - DB_PORT=3306
       - DB_USER=Maalco
       - DB_PASSWORD=xgQCkoUmBexaitGm
       - DB_NAME=Maalco_prod
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
