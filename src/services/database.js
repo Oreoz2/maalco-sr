@@ -10,16 +10,13 @@ class DatabaseService {
   initializePool() {
     const config = {
       host: process.env.DB_HOST || '127.0.0.1',
-      port: parseInt(process.env.DB_PORT) || 3306,
+      port: parseInt(process.env.DB_PORT) || 3307,
       user: process.env.DB_USER || 'Maalco',
       password: process.env.DB_PASSWORD || 'xgQCkoUmBexaitGm',
       database: process.env.DB_NAME || 'Maalco_prod',
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,
-      acquireTimeout: 60000,
-      timeout: 60000,
-      family: 4, // Force IPv4
     };
 
     this.pool = mysql.createPool(config);
@@ -543,6 +540,515 @@ class DatabaseService {
 
     const [rows] = await this.pool.execute(query, params);
     return rows;
+  }
+
+  // ==========================================
+  // DRIVERS DASHBOARD QUERIES
+  // ==========================================
+
+  // Get all active drivers from orders table - REWRITTEN Phase 7.1
+  async getDrivers(dateRange = '30d') {
+    const { condition: dateCondition, params } = this.getDateCondition(dateRange, 'o.created_at');
+
+    const query = `
+      SELECT
+        db.id,
+        db.name,
+        db.mobile,
+        db.admin_id,
+        db.created_at as joinDate,
+        db.status,
+        db.is_available,
+
+        -- Order Assignment Metrics (from orders table)
+        COUNT(DISTINCT o.id) as totalOrdersAssigned,
+        COUNT(DISTINCT CASE WHEN o.active_status = '6' THEN o.id END) as deliveredCount,
+        COUNT(DISTINCT CASE WHEN o.active_status = '5' THEN o.id END) as outForDeliveryCount,
+        COUNT(DISTINCT CASE WHEN o.active_status = '7' THEN o.id END) as cancelledCount,
+        COUNT(DISTINCT CASE WHEN o.active_status = '8' THEN o.id END) as returnedCount,
+
+        -- Delivery Time from order_statuses (status 5 -> 6)
+        COALESCE(ROUND(AVG(
+          CASE
+            WHEN os_delivered.status = '6' AND os_out.created_at IS NOT NULL
+            THEN TIMESTAMPDIFF(MINUTE, os_out.created_at, os_delivered.created_at)
+          END
+        ), 2), 0) as avgDeliveryTimeMinutes,
+
+        COALESCE(ROUND(AVG(
+          CASE
+            WHEN os_delivered.status = '6' AND os_out.created_at IS NOT NULL
+            THEN TIMESTAMPDIFF(MINUTE, os_out.created_at, os_delivered.created_at) / 60
+          END
+        ), 2), 0) as avgDeliveryTimeHours,
+
+        MIN(
+          CASE
+            WHEN os_delivered.status = '6' AND os_out.created_at IS NOT NULL
+            THEN TIMESTAMPDIFF(MINUTE, os_out.created_at, os_delivered.created_at)
+          END
+        ) as minDeliveryTimeMinutes,
+
+        MAX(
+          CASE
+            WHEN os_delivered.status = '6' AND os_out.created_at IS NOT NULL
+            THEN TIMESTAMPDIFF(MINUTE, os_out.created_at, os_delivered.created_at)
+          END
+        ) as maxDeliveryTimeMinutes,
+
+        -- Productivity Metrics
+        COUNT(DISTINCT DATE(o.created_at)) as activeDays,
+        ROUND(COUNT(DISTINCT o.id) / NULLIF(COUNT(DISTINCT DATE(o.created_at)), 0), 2) as avgOrdersPerDay,
+
+        -- Success Rate (delivered / total assigned)
+        ROUND((COUNT(DISTINCT CASE WHEN o.active_status = '6' THEN o.id END) * 100.0 /
+          NULLIF(COUNT(DISTINCT o.id), 0)), 1) as deliverySuccessRate
+
+      FROM orders o
+      INNER JOIN delivery_boys db ON o.delivery_boy_id = db.id
+      LEFT JOIN order_statuses os_out ON o.id = os_out.order_id
+        AND os_out.status = '5'
+      LEFT JOIN order_statuses os_delivered ON o.id = os_delivered.order_id
+        AND os_delivered.status = '6'
+      WHERE o.delivery_boy_id IS NOT NULL
+        AND o.delivery_boy_id != 0
+        ${dateCondition}
+      GROUP BY db.id, db.name, db.mobile, db.admin_id, db.created_at, db.status, db.is_available
+      ORDER BY deliveredCount DESC, totalOrdersAssigned DESC
+    `;
+
+    const [rows] = await this.pool.execute(query, params);
+    return rows;
+  }
+
+  // Get driver daily activity from order_statuses - REWRITTEN Phase 7
+  async getDriverDailyActivity(dateRange = '30d') {
+    // Use a union approach to capture activity from both order creation and delivery dates
+    const { condition: dateCondition1, params: params1 } = this.getDateCondition(dateRange, 'activity_date');
+
+    const query = `
+      SELECT
+        driverId,
+        driverName,
+        activity_date as date,
+        SUM(totalOrders) as totalOrders,
+        SUM(outForDelivery) as outForDelivery,
+        SUM(delivered) as delivered,
+        ROUND(AVG(avgDeliveryTimeMinutes), 2) as avgDeliveryTimeMinutes,
+        ROUND((SUM(delivered) * 100.0 / NULLIF(SUM(totalOrders), 0)), 1) as successRate,
+        DAYNAME(activity_date) as dayName
+      FROM (
+        -- Get all assigned orders by date
+        SELECT
+          db.id as driverId,
+          db.name as driverName,
+          DATE(COALESCE(os_delivered.created_at, os_out.created_at, o.created_at)) as activity_date,
+          COUNT(DISTINCT o.id) as totalOrders,
+          COUNT(DISTINCT CASE WHEN os_out.order_id IS NOT NULL THEN o.id END) as outForDelivery,
+          COUNT(DISTINCT CASE WHEN os_delivered.order_id IS NOT NULL THEN o.id END) as delivered,
+          AVG(
+            CASE
+              WHEN os_delivered.created_at IS NOT NULL AND os_out.created_at IS NOT NULL
+              THEN TIMESTAMPDIFF(MINUTE, os_out.created_at, os_delivered.created_at)
+            END
+          ) as avgDeliveryTimeMinutes
+        FROM orders o
+        INNER JOIN delivery_boys db ON o.delivery_boy_id = db.id
+        LEFT JOIN order_statuses os_out ON o.id = os_out.order_id AND os_out.status = '5'
+        LEFT JOIN order_statuses os_delivered ON o.id = os_delivered.order_id AND os_delivered.status = '6'
+        WHERE o.delivery_boy_id IS NOT NULL
+          AND o.delivery_boy_id != 0
+        GROUP BY db.id, db.name, DATE(COALESCE(os_delivered.created_at, os_out.created_at, o.created_at))
+      ) as driver_activity
+      WHERE 1=1 ${dateCondition1}
+      GROUP BY driverId, driverName, activity_date, DAYNAME(activity_date)
+      ORDER BY activity_date DESC, driverId ASC
+    `;
+
+    const [rows] = await this.pool.execute(query, params1);
+    return rows;
+  }
+
+  // ==========================================
+  // CSR DASHBOARD QUERIES
+  // ==========================================
+
+  // Get all CSR staff (role_id = 7 or 8 from admins table)
+  async getCSRStaff(dateRange = '30d') {
+    const { condition: dateCondition, params } = this.getDateCondition(dateRange, 'ci.created_at');
+
+    const query = `
+      SELECT
+        a.id,
+        a.username as name,
+        a.email,
+        a.created_at as joinDate,
+        a.status,
+        COUNT(DISTINCT ci.id) as totalInteractions,
+        COUNT(DISTINCT CASE WHEN ci.interaction_type = 'new_order' THEN ci.id END) as newOrderCalls,
+        COUNT(DISTINCT CASE WHEN ci.interaction_type = 'complaint' THEN ci.id END) as complaintCalls,
+        COUNT(DISTINCT CASE WHEN ci.interaction_type = 'order_inquiry' THEN ci.id END) as orderInquiryCalls,
+        COUNT(DISTINCT CASE WHEN ci.call_outcome = 'successful_order' THEN ci.id END) as successfulOrders,
+        COUNT(DISTINCT CASE WHEN ci.call_outcome = 'successful_registration' THEN ci.id END) as successfulRegistrations,
+        COUNT(DISTINCT CASE WHEN ci.call_outcome = 'complaint_resolved' THEN ci.id END) as complaintsResolved,
+        COUNT(DISTINCT CASE WHEN ci.call_outcome = 'information_provided' THEN ci.id END) as informationProvided,
+        COALESCE(SUM(ci.order_value), 0) as totalOrderValue,
+        COALESCE(AVG(CASE WHEN ci.call_duration IS NOT NULL AND ci.call_duration != '' THEN CAST(ci.call_duration AS UNSIGNED) END), 0) as avgCallDuration,
+        COALESCE(AVG(CASE WHEN ci.updated_at IS NOT NULL THEN TIMESTAMPDIFF(SECOND, ci.created_at, ci.updated_at) END), 0) as avgResponseTimeSeconds,
+        COALESCE(AVG(CASE WHEN ci.call_outcome = 'successful_order' AND ci.updated_at IS NOT NULL
+          THEN TIMESTAMPDIFF(SECOND, ci.created_at, ci.updated_at) END), 0) as avgOrderProcessingTimeSeconds,
+        COUNT(DISTINCT DATE(ci.created_at)) as activeDays,
+        ROUND(COUNT(DISTINCT ci.id) / NULLIF(COUNT(DISTINCT DATE(ci.created_at)), 0), 2) as avgInteractionsPerDay
+      FROM admins a
+      LEFT JOIN call_centre_interactions ci ON a.id = ci.operator_id ${dateCondition}
+      WHERE a.role_id IN (7, 8) AND a.status = 1 AND a.id IN (9, 24)
+      GROUP BY a.id, a.username, a.email, a.created_at, a.status
+      ORDER BY totalInteractions DESC
+    `;
+
+    const [rows] = await this.pool.execute(query, params);
+    return rows;
+  }
+
+  // Get CSR daily activity with enhanced timing metrics
+  async getCSRDailyActivity(dateRange = '30d') {
+    const { condition: dateCondition, params } = this.getDateCondition(dateRange, 'ci.created_at');
+
+    const query = `
+      SELECT
+        a.id as csrId,
+        a.username as csrName,
+        DATE(ci.created_at) as date,
+        COUNT(ci.id) as interactions,
+        COUNT(CASE WHEN ci.interaction_type = 'new_order' THEN ci.id END) as newOrderCalls,
+        COUNT(CASE WHEN ci.call_outcome = 'successful_order' THEN ci.id END) as successfulOrders,
+        COUNT(CASE WHEN ci.call_outcome = 'successful_registration' THEN ci.id END) as successfulRegistrations,
+        COUNT(CASE WHEN ci.interaction_type = 'complaint' THEN ci.id END) as complaintCalls,
+        SUM(ci.order_value) as orderValue,
+        AVG(CASE WHEN ci.updated_at IS NOT NULL
+          THEN TIMESTAMPDIFF(SECOND, ci.created_at, ci.updated_at) END) as avgResponseTimeSeconds,
+        ROUND((COUNT(CASE WHEN ci.call_outcome = 'successful_order' THEN ci.id END) * 100.0 /
+          NULLIF(COUNT(CASE WHEN ci.interaction_type = 'new_order' THEN ci.id END), 0)), 1) as successRate,
+        HOUR(ci.created_at) as hour,
+        DAYNAME(ci.created_at) as dayName
+      FROM admins a
+      JOIN call_centre_interactions ci ON a.id = ci.operator_id
+      WHERE a.role_id IN (7, 8) AND a.id IN (9, 24) ${dateCondition}
+      GROUP BY a.id, a.username, DATE(ci.created_at), HOUR(ci.created_at), DAYNAME(ci.created_at)
+      ORDER BY DATE(ci.created_at) DESC, HOUR(ci.created_at) ASC
+    `;
+
+    const [rows] = await this.pool.execute(query, params);
+    return rows;
+  }
+
+  // Get CSR hourly performance breakdown
+  async getCSRHourlyPerformance(dateRange = '30d') {
+    const { condition: dateCondition, params } = this.getDateCondition(dateRange, 'ci.created_at');
+
+    const query = `
+      SELECT
+        a.id as csrId,
+        a.username as csrName,
+        HOUR(ci.created_at) as hour,
+        COUNT(ci.id) as interactions,
+        COUNT(CASE WHEN ci.call_outcome = 'successful_order' THEN ci.id END) as successfulOrders,
+        AVG(CASE WHEN ci.updated_at IS NOT NULL
+          THEN TIMESTAMPDIFF(SECOND, ci.created_at, ci.updated_at) END) as avgResponseTimeSeconds
+      FROM admins a
+      JOIN call_centre_interactions ci ON a.id = ci.operator_id
+      WHERE a.role_id IN (7, 8) AND a.id IN (9, 24) ${dateCondition}
+      GROUP BY a.id, a.username, HOUR(ci.created_at)
+      ORDER BY HOUR(ci.created_at) ASC
+    `;
+
+    const [rows] = await this.pool.execute(query, params);
+    return rows;
+  }
+
+  // Get CSR interaction type breakdown
+  async getCSRInteractionBreakdown(csrId, dateRange = '30d') {
+    const { condition: dateCondition, params: dateParams } = this.getDateCondition(dateRange, 'ci.created_at');
+    const params = [csrId, ...dateParams];
+
+    const query = `
+      SELECT
+        ci.interaction_type,
+        ci.call_outcome,
+        COUNT(ci.id) as count,
+        SUM(ci.order_value) as totalValue,
+        AVG(CASE WHEN ci.updated_at IS NOT NULL
+          THEN TIMESTAMPDIFF(SECOND, ci.created_at, ci.updated_at) END) as avgTimeSeconds
+      FROM call_centre_interactions ci
+      WHERE ci.operator_id = ? ${dateCondition}
+      GROUP BY ci.interaction_type, ci.call_outcome
+      ORDER BY count DESC
+    `;
+
+    const [rows] = await this.pool.execute(query, params);
+    return rows;
+  }
+
+  // ==========================================
+  // PACKING DASHBOARD QUERIES
+  // ==========================================
+
+  // Get all packing staff (role_id = 9 from admins table) - ENHANCED Phase 4
+  async getPackingStaff(dateRange = '30d') {
+    const { condition: dateCondition, params } = this.getDateCondition(dateRange, 'os.created_at');
+
+    const query = `
+      SELECT
+        a.id,
+        a.username as name,
+        a.email,
+        a.created_at as joinDate,
+        a.status,
+
+        -- Quantity Metrics
+        COUNT(DISTINCT os.order_id) as totalOrdersPacked,
+        COUNT(DISTINCT CASE WHEN os.status = '4' THEN os.order_id END) as ordersShipped,
+        COUNT(DISTINCT CASE WHEN final_status.status = '6' THEN os.order_id END) as ordersDelivered,
+        COUNT(DISTINCT CASE WHEN final_status.status = '8' THEN os.order_id END) as ordersReturned,
+
+        -- Timing Metrics (calculated from order_statuses transitions)
+        COALESCE(AVG(
+          CASE WHEN os.status IN ('3', '4') AND o.created_at IS NOT NULL
+          THEN TIMESTAMPDIFF(MINUTE, o.created_at, os.created_at)
+          END
+        ), 0) as avgPackingTimeMinutes,
+
+        -- Time from packing to shipment
+        COALESCE(AVG(
+          CASE WHEN os.status = '4' AND os_shipped.created_at IS NOT NULL
+          THEN TIMESTAMPDIFF(MINUTE, os.created_at, os_shipped.created_at)
+          END
+        ), 0) as avgTimeToShipMinutes,
+
+        -- Productivity Metrics
+        COUNT(DISTINCT DATE(os.created_at)) as activeDays,
+        ROUND(COUNT(DISTINCT os.order_id) / NULLIF(COUNT(DISTINCT DATE(os.created_at)), 0), 2) as avgOrdersPerDay,
+
+        -- Success Rate (delivered / packed)
+        ROUND((COUNT(DISTINCT CASE WHEN final_status.status = '6' THEN os.order_id END) * 100.0 /
+          NULLIF(COUNT(DISTINCT os.order_id), 0)), 1) as deliverySuccessRate
+
+      FROM admins a
+      LEFT JOIN order_statuses os ON a.id = os.created_by AND os.status IN ('3', '4') ${dateCondition}
+      LEFT JOIN orders o ON os.order_id = o.id
+      LEFT JOIN order_statuses os_shipped ON os.order_id = os_shipped.order_id AND os_shipped.status = '5'
+      LEFT JOIN (
+        SELECT order_id, status, MAX(created_at) as created_at
+        FROM order_statuses
+        WHERE status IN ('6', '7', '8')
+        GROUP BY order_id, status
+      ) final_status ON os.order_id = final_status.order_id
+      WHERE a.role_id = 9 AND a.status = 1 AND a.id = 31
+      GROUP BY a.id, a.username, a.email, a.created_at, a.status
+      ORDER BY totalOrdersPacked DESC
+    `;
+
+    const [rows] = await this.pool.execute(query, params);
+    return rows;
+  }
+
+  // Get packing daily activity - ENHANCED Phase 4
+  async getPackingDailyActivity(dateRange = '30d') {
+    const { condition: dateCondition, params } = this.getDateCondition(dateRange, 'os.created_at');
+
+    const query = `
+      SELECT
+        a.id as packerId,
+        a.username as packerName,
+        DATE(os.created_at) as date,
+        COUNT(DISTINCT os.order_id) as ordersPacked,
+        COUNT(DISTINCT CASE WHEN os.status = '4' THEN os.order_id END) as ordersShipped,
+        AVG(CASE WHEN os.status IN ('3', '4') AND o.created_at IS NOT NULL
+          THEN TIMESTAMPDIFF(MINUTE, o.created_at, os.created_at)
+        END) as avgPackingTimeMinutes,
+        ROUND(AVG(CASE WHEN os.status IN ('3', '4') AND o.created_at IS NOT NULL
+          THEN TIMESTAMPDIFF(MINUTE, o.created_at, os.created_at)
+        END) / 60, 2) as avgPackingTimeHours,
+        DAYNAME(os.created_at) as dayName
+      FROM admins a
+      JOIN order_statuses os ON a.id = os.created_by AND os.status IN ('3', '4')
+      LEFT JOIN orders o ON os.order_id = o.id
+      WHERE a.role_id = 9 AND a.id = 31 ${dateCondition}
+      GROUP BY a.id, a.username, DATE(os.created_at), DAYNAME(os.created_at)
+      ORDER BY DATE(os.created_at) DESC
+    `;
+
+    const [rows] = await this.pool.execute(query, params);
+    return rows;
+  }
+
+  // Get packing timing breakdown - NEW Phase 4
+  async getPackingTimingBreakdown(packerId, dateRange = '30d') {
+    const { condition: dateCondition, params: dateParams } = this.getDateCondition(dateRange, 'os.created_at');
+    const params = [packerId, ...dateParams];
+
+    const query = `
+      SELECT
+        os.order_id,
+        o.created_at as orderCreated,
+        os.created_at as packedAt,
+        os_shipped.created_at as shippedAt,
+        os_delivered.created_at as deliveredAt,
+        TIMESTAMPDIFF(MINUTE, o.created_at, os.created_at) as packingTimeMinutes,
+        CASE WHEN os_shipped.created_at IS NOT NULL
+          THEN TIMESTAMPDIFF(MINUTE, os.created_at, os_shipped.created_at)
+        END as timeToShipMinutes,
+        CASE WHEN os_delivered.created_at IS NOT NULL
+          THEN TIMESTAMPDIFF(MINUTE, os_shipped.created_at, os_delivered.created_at)
+        END as deliveryTimeMinutes,
+        CASE WHEN os_delivered.created_at IS NOT NULL
+          THEN TIMESTAMPDIFF(MINUTE, o.created_at, os_delivered.created_at)
+        END as totalTimeMinutes
+      FROM order_statuses os
+      JOIN orders o ON os.order_id = o.id
+      LEFT JOIN order_statuses os_shipped ON os.order_id = os_shipped.order_id AND os_shipped.status = '5'
+      LEFT JOIN order_statuses os_delivered ON os.order_id = os_delivered.order_id AND os_delivered.status = '6'
+      WHERE os.created_by = ? AND os.status IN ('3', '4') ${dateCondition}
+      ORDER BY os.created_at DESC
+      LIMIT 100
+    `;
+
+    const [rows] = await this.pool.execute(query, params);
+    return rows;
+  }
+
+  // ==========================================
+  // LEADERBOARD & COMPARISON QUERIES - Phase 5
+  // ==========================================
+
+  // Get CSR leaderboard with rankings
+  async getCSRLeaderboard(dateRange = '30d', sortBy = 'interactions') {
+    const { condition: dateCondition, params } = this.getDateCondition(dateRange, 'ci.created_at');
+
+    const orderBy = {
+      interactions: 'totalInteractions DESC',
+      successRate: 'successRate DESC',
+      orderValue: 'totalOrderValue DESC',
+      responseTime: 'avgResponseTimeSeconds ASC'
+    }[sortBy] || 'totalInteractions DESC';
+
+    const query = `
+      SELECT
+        a.id,
+        a.username as name,
+        a.email,
+        COUNT(DISTINCT ci.id) as totalInteractions,
+        COUNT(DISTINCT CASE WHEN ci.call_outcome = 'successful_order' THEN ci.id END) as successfulOrders,
+        COALESCE(SUM(ci.order_value), 0) as totalOrderValue,
+        COALESCE(AVG(CASE WHEN ci.updated_at IS NOT NULL
+          THEN TIMESTAMPDIFF(SECOND, ci.created_at, ci.updated_at) END), 0) as avgResponseTimeSeconds,
+        ROUND((COUNT(DISTINCT CASE WHEN ci.call_outcome = 'successful_order' THEN ci.id END) * 100.0 /
+          NULLIF(COUNT(DISTINCT CASE WHEN ci.interaction_type = 'new_order' THEN ci.id END), 0)), 1) as successRate
+      FROM admins a
+      LEFT JOIN call_centre_interactions ci ON a.id = ci.operator_id ${dateCondition}
+      WHERE a.role_id IN (7, 8) AND a.status = 1 AND a.id IN (9, 24)
+      GROUP BY a.id, a.username, a.email
+      ORDER BY ${orderBy}
+    `;
+
+    const [rows] = await this.pool.execute(query, params);
+    return rows.map((row, index) => ({ ...row, rank: index + 1 }));
+  }
+
+  // Get driver leaderboard based on order_statuses activity - REWRITTEN Phase 7
+  async getDriverLeaderboard(dateRange = '30d', sortBy = 'deliveries') {
+    const { condition: dateCondition, params } = this.getDateCondition(dateRange, 'os.created_at');
+
+    const orderBy = {
+      deliveries: 'deliveredCount DESC',
+      successRate: 'deliverySuccessRate DESC',
+      deliveryTime: 'avgDeliveryTimeMinutes ASC',
+      productivity: 'avgOrdersPerDay DESC'
+    }[sortBy] || 'deliveredCount DESC';
+
+    const query = `
+      SELECT
+        db.id,
+        db.name,
+        db.mobile,
+
+        -- Delivery Metrics
+        COUNT(DISTINCT CASE WHEN os.status = '6' THEN os.order_id END) as deliveredCount,
+        COUNT(DISTINCT CASE WHEN os.status = '5' THEN os.order_id END) as outForDeliveryCount,
+        COUNT(DISTINCT os.order_id) as totalOrdersHandled,
+
+        -- Average Delivery Time
+        COALESCE(ROUND(AVG(
+          CASE
+            WHEN os.status = '6' AND os_out.created_at IS NOT NULL
+            THEN TIMESTAMPDIFF(MINUTE, os_out.created_at, os.created_at)
+          END
+        ), 2), 0) as avgDeliveryTimeMinutes,
+
+        -- Success Rate
+        ROUND((COUNT(DISTINCT CASE WHEN os.status = '6' THEN os.order_id END) * 100.0 /
+          NULLIF(COUNT(DISTINCT os.order_id), 0)), 1) as deliverySuccessRate,
+
+        -- Productivity
+        ROUND(COUNT(DISTINCT os.order_id) / NULLIF(COUNT(DISTINCT DATE(os.created_at)), 0), 2) as avgOrdersPerDay
+
+      FROM order_statuses os
+      INNER JOIN delivery_boys db ON os.created_by = db.id
+      LEFT JOIN order_statuses os_out ON os.order_id = os_out.order_id
+        AND os_out.status = '5'
+        AND os_out.created_by = os.created_by
+      WHERE os.status IN ('5', '6')
+        AND os.user_type = 2
+        ${dateCondition}
+      GROUP BY db.id, db.name, db.mobile
+      ORDER BY ${orderBy}
+    `;
+
+    const [rows] = await this.pool.execute(query, params);
+    return rows.map((row, index) => ({ ...row, rank: index + 1 }));
+  }
+
+  // Get packing leaderboard
+  async getPackingLeaderboard(dateRange = '30d', sortBy = 'packed') {
+    const { condition: dateCondition, params } = this.getDateCondition(dateRange, 'os.created_at');
+
+    const orderBy = {
+      packed: 'totalOrdersPacked DESC',
+      successRate: 'deliverySuccessRate DESC',
+      packingTime: 'avgPackingTimeMinutes ASC',
+      productivity: 'avgOrdersPerDay DESC'
+    }[sortBy] || 'totalOrdersPacked DESC';
+
+    const query = `
+      SELECT
+        a.id,
+        a.username as name,
+        COUNT(DISTINCT os.order_id) as totalOrdersPacked,
+        COUNT(DISTINCT CASE WHEN final_status.status = '6' THEN os.order_id END) as ordersDelivered,
+        COALESCE(AVG(
+          CASE WHEN os.status IN ('3', '4') AND o.created_at IS NOT NULL
+          THEN TIMESTAMPDIFF(MINUTE, o.created_at, os.created_at)
+          END
+        ), 0) as avgPackingTimeMinutes,
+        ROUND(COUNT(DISTINCT os.order_id) / NULLIF(COUNT(DISTINCT DATE(os.created_at)), 0), 2) as avgOrdersPerDay,
+        ROUND((COUNT(DISTINCT CASE WHEN final_status.status = '6' THEN os.order_id END) * 100.0 /
+          NULLIF(COUNT(DISTINCT os.order_id), 0)), 1) as deliverySuccessRate
+      FROM admins a
+      LEFT JOIN order_statuses os ON a.id = os.created_by AND os.status IN ('3', '4') ${dateCondition}
+      LEFT JOIN orders o ON os.order_id = o.id
+      LEFT JOIN (
+        SELECT order_id, status, MAX(created_at) as created_at
+        FROM order_statuses
+        WHERE status IN ('6', '7', '8')
+        GROUP BY order_id, status
+      ) final_status ON os.order_id = final_status.order_id
+      WHERE a.role_id = 9 AND a.status = 1 AND a.id = 31
+      GROUP BY a.id, a.username
+      ORDER BY ${orderBy}
+    `;
+
+    const [rows] = await this.pool.execute(query, params);
+    return rows.map((row, index) => ({ ...row, rank: index + 1 }));
   }
 
   async close() {

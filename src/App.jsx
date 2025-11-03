@@ -2,16 +2,19 @@ import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } f
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button.jsx';
 import { Card } from '@/components/ui/card.jsx';
-import { 
-  Home, 
-  Trophy, 
-  Users, 
+import {
+  Home,
+  Trophy,
+  Users,
   Menu,
   X,
   RefreshCw,
   UserPlus,
   ShoppingCart,
-  LogOut
+  LogOut,
+  Truck,
+  Headphones,
+  Package
 } from 'lucide-react';
 import './App.css';
 import ApiService from './services/apiService';
@@ -25,6 +28,9 @@ import Leaderboard from './components/Leaderboard';
 import SRProfile from './components/SRProfile';
 import Registrations from './components/Registrations';
 import Sales from './components/Sales';
+import Drivers from './components/Drivers';
+import CSR from './components/CSR';
+import Packing from './components/Packing';
 
 function Navigation() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -37,6 +43,9 @@ function Navigation() {
     { path: '/sales', icon: ShoppingCart, label: 'Sales' },
     { path: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
     { path: '/srs', icon: Users, label: 'SRs' },
+    { path: '/drivers', icon: Truck, label: 'Drivers' },
+    { path: '/csr', icon: Headphones, label: 'CSR' },
+    { path: '/packing', icon: Package, label: 'Packing' },
   ];
 
   return (
@@ -231,6 +240,9 @@ function AppContent() {
             <Route path="/leaderboard" element={<Leaderboard />} />
             <Route path="/sr/:id" element={<SRProfile />} />
             <Route path="/srs" element={<SRsList />} />
+            <Route path="/drivers" element={<Drivers />} />
+            <Route path="/csr" element={<CSR />} />
+            <Route path="/packing" element={<Packing />} />
             {/* Redirect any other path to dashboard */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

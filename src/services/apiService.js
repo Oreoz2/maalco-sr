@@ -38,6 +38,54 @@ class ApiService {
     return response.json();
   }
 
+  // Upload driver profile image
+  async uploadDriverImage(driverId, imageFile) {
+    const formData = new FormData();
+    formData.append('image', imageFile);
+
+    const response = await fetch(`${API_BASE_URL}/drivers/${driverId}/upload-image`, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to upload driver image');
+    }
+    return response.json();
+  }
+
+  // Upload CSR profile image
+  async uploadCSRImage(csrId, imageFile) {
+    const formData = new FormData();
+    formData.append('image', imageFile);
+
+    const response = await fetch(`${API_BASE_URL}/csr/${csrId}/upload-image`, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to upload CSR image');
+    }
+    return response.json();
+  }
+
+  // Upload packing staff profile image
+  async uploadPackingImage(packerId, imageFile) {
+    const formData = new FormData();
+    formData.append('image', imageFile);
+
+    const response = await fetch(`${API_BASE_URL}/packing/${packerId}/upload-image`, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to upload packing image');
+    }
+    return response.json();
+  }
+
   // Get dashboard summary
   async getDashboardSummary(dateRange = '7d') {
     const response = await fetch(`${API_BASE_URL}/dashboard/summary?dateRange=${dateRange}`);
@@ -155,6 +203,124 @@ class ApiService {
     const response = await fetch(`${API_BASE_URL}/sales/trends?dateRange=${dateRange}`);
     if (!response.ok) {
       throw new Error('Failed to fetch sales trends');
+    }
+    return response.json();
+  }
+
+  // ==========================================
+  // DRIVERS DASHBOARD API METHODS
+  // ==========================================
+
+  async getDrivers(dateRange = '30d') {
+    const response = await fetch(`${API_BASE_URL}/drivers?dateRange=${dateRange}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch drivers');
+    }
+    return response.json();
+  }
+
+  async getDriverTrends(dateRange = '30d') {
+    const response = await fetch(`${API_BASE_URL}/drivers/trends?dateRange=${dateRange}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch driver trends');
+    }
+    return response.json();
+  }
+
+  // ==========================================
+  // CSR DASHBOARD API METHODS
+  // ==========================================
+
+  async getCSRStaff(dateRange = '30d') {
+    const response = await fetch(`${API_BASE_URL}/csr?dateRange=${dateRange}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch CSR staff');
+    }
+    return response.json();
+  }
+
+  async getCSRTrends(dateRange = '30d') {
+    const response = await fetch(`${API_BASE_URL}/csr/trends?dateRange=${dateRange}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch CSR trends');
+    }
+    return response.json();
+  }
+
+  // ==========================================
+  // PACKING DASHBOARD API METHODS
+  // ==========================================
+
+  async getPackingStaff(dateRange = '30d') {
+    const response = await fetch(`${API_BASE_URL}/packing?dateRange=${dateRange}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch packing staff');
+    }
+    return response.json();
+  }
+
+  async getPackingTrends(dateRange = '30d') {
+    const response = await fetch(`${API_BASE_URL}/packing/trends?dateRange=${dateRange}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch packing trends');
+    }
+    return response.json();
+  }
+
+  // ==========================================
+  // ENHANCED API METHODS - Phase 2, 5 & 6
+  // ==========================================
+
+  // CSR Enhanced Methods
+  async getCSRHourlyPerformance(dateRange = '30d') {
+    const response = await fetch(`${API_BASE_URL}/csr/hourly-performance?dateRange=${dateRange}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch CSR hourly performance');
+    }
+    return response.json();
+  }
+
+  async getCSRInteractionBreakdown(csrId, dateRange = '30d') {
+    const response = await fetch(`${API_BASE_URL}/csr/${csrId}/interaction-breakdown?dateRange=${dateRange}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch CSR interaction breakdown');
+    }
+    return response.json();
+  }
+
+  // Packing Enhanced Methods
+  async getPackingTimingBreakdown(packerId, dateRange = '30d') {
+    const response = await fetch(`${API_BASE_URL}/packing/${packerId}/timing-breakdown?dateRange=${dateRange}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch packing timing breakdown');
+    }
+    return response.json();
+  }
+
+  // ==========================================
+  // LEADERBOARD API METHODS - Phase 5
+  // ==========================================
+
+  async getCSRLeaderboard(dateRange = '30d', sortBy = 'interactions') {
+    const response = await fetch(`${API_BASE_URL}/leaderboard/csr?dateRange=${dateRange}&sortBy=${sortBy}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch CSR leaderboard');
+    }
+    return response.json();
+  }
+
+  async getDriverLeaderboard(dateRange = '30d', sortBy = 'deliveries') {
+    const response = await fetch(`${API_BASE_URL}/leaderboard/drivers?dateRange=${dateRange}&sortBy=${sortBy}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch driver leaderboard');
+    }
+    return response.json();
+  }
+
+  async getPackingLeaderboard(dateRange = '30d', sortBy = 'packed') {
+    const response = await fetch(`${API_BASE_URL}/leaderboard/packing?dateRange=${dateRange}&sortBy=${sortBy}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch packing leaderboard');
     }
     return response.json();
   }
